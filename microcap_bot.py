@@ -34,7 +34,7 @@ exchange.set_sandbox_mode(True)
 # Bruk kø for handelhistorikk
 trade_queue = deque()
 open_position = None
-lock = threading.lock()
+lock = threading.Lock()
 
 #----------- WEBSOCKET -----------
 ws_symbol = SYMBOL.replace("/", "").lower()
@@ -53,7 +53,7 @@ def on_message(ws, message):
     with lock:
         trade_queue.append((ts, qty, price))
         cutoff = time.time() - HISTORICAL_WINDOW_SECONDS
-        while trade_queue and trade_queue [0][0]< cutoff:
+        while trade_queue and trade_queue[0][0]< cutoff:
             trade_queue.popleft()
 
 
@@ -91,7 +91,7 @@ def place_market_order(side, symbol, usdt_amount):
         if side == "buy":
             order = exchange.create_market_buy_order(symbol, amount)
         else:
-            order = exchange.amount_to_precision(symbol, amount)
+            order = exchange.create_market_sell_order(symbol, amount)
 
 
         print (f"order ({side.upper()}):", order)
@@ -111,7 +111,7 @@ def main_loop():
         hist_avg = vol_hist / max(1, (HISTORICAL_WINDOW_SECONDS/VOLUME_WINDOW_SECONDS))
 
      
-        print(f"[INFO] Recent vol=>{vol_recent:.4f}, Hist avh={hist_avg:.4f}")
+        print(f"[INFO] Recent vol=>{vol_recent:.4f}, Hist avg={hist_avg:.4f}")
 
 
         # Kjøper når coin "spiker"
@@ -122,7 +122,7 @@ def main_loop():
             if open_position is None:
                 buy = place_market_order("buy", SYMBOL, TRADE_AMOUNT_USDT)
                 if buy:
-                    entry = float(buy.get("avrage") or buy.get("price") or 0)
+                    entry = float(buy.get("average") or buy.get("price") or 0)
                     open_position = {
                         "entry": entry,
                         "size": float(buy["amount"])
@@ -139,7 +139,7 @@ def main_loop():
 
 
             change = (last - open_position["entry"]) / open_position["entry"]
-            print(f"[POS] P/L: {change*100:2f}%")
+            print(f"[POS] P/L: {change*100:.2f}%")
 
 
             if change >= TP_PERCENT or change <= -SL_PERCENT:
@@ -157,5 +157,5 @@ def main_loop():
 if __name__ == "__main__":
     t = threading.Thread(target=start_websocket, daemon=True)
     t.start()
-    main_loop
+    main_loop()
    
